@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Cotizador Corte Laser | DMP</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  [x-cloak]{display:none!important}
+  *{-webkit-tap-highlight-color:transparent;box-sizing:border-box}
+  body{font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:#f1f5f9;min-height:100vh}
+
+  /* Brand colors: --blue: #003580  --red: #cc1f1f */
+
+  /* Inputs */
+  .inp{width:100%;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:11px 14px;font-size:15px;color:#0f172a;transition:border-color .15s,box-shadow .15s}
+  .inp::placeholder{color:#94a3b8}
+  .inp:focus{outline:none;border-color:#003580;box-shadow:0 0 0 3px rgba(0,53,128,.1)}
+  select.inp{appearance:auto}
+  textarea.inp{resize:none}
+  input[type=number]::-webkit-inner-spin-button{opacity:1}
+
+  /* Cards */
+  .card{background:white;border-radius:20px;box-shadow:0 1px 3px rgba(0,0,0,.05),0 4px 12px rgba(0,0,0,.06)}
+
+  /* Buttons */
+  .btn-primary{background:linear-gradient(to bottom,#0052a5,#003580);box-shadow:0 3px 12px rgba(0,53,128,.25);color:white;font-weight:700;border-radius:16px;transition:all .15s;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .btn-primary:active{transform:scale(.98);box-shadow:0 1px 4px rgba(0,53,128,.2)}
+  .btn-primary:disabled{opacity:.5;pointer-events:none}
+  .btn-ghost{background:white;border:1.5px solid #e2e8f0;color:#475569;font-weight:600;border-radius:16px;transition:all .15s;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .btn-ghost:active{background:#f8fafc}
+
+  /* Shape cards */
+  .shape-card{border:2px solid #e2e8f0;background:white;border-radius:16px;padding:10px 6px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;transition:all .15s cubic-bezier(.4,0,.2,1);user-select:none}
+  .shape-card:active{transform:scale(.93)}
+  .shape-card.sel{border-color:#003580;background:#eff4ff;box-shadow:0 0 0 3px rgba(0,53,128,.1)}
+
+  /* Payment options */
+  .pay-opt{border:2px solid #e2e8f0;background:white;border-radius:16px;padding:14px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:all .15s;width:100%;text-align:left}
+  .pay-opt:active{transform:scale(.98)}
+  .pay-opt.sel{border-color:#003580;background:#eff4ff}
+
+  /* Section label */
+  .sec-lbl{font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#003580}
+
+  /* Stepper connector */
+  .step-line{flex:1;height:2px;background:#e2e8f0;margin:0 3px;margin-top:13px;transition:background .3s}
+  .step-line.done{background:#003580}
+
+  /* Animations */
+  @keyframes slideIn{from{opacity:0;transform:translateX(22px)}to{opacity:1;transform:translateX(0)}}
+  .slide-in{animation:slideIn .25s ease}
+  @keyframes scaleIn{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+  .scale-in{animation:scaleIn .4s cubic-bezier(.34,1.56,.64,1) forwards}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+  .fade-up{animation:fadeUp .4s ease forwards}
+  @keyframes checkDraw{from{stroke-dashoffset:60;opacity:0}to{stroke-dashoffset:0;opacity:1}}
+  .check-path{stroke-dasharray:60;stroke-dashoffset:60;animation:checkDraw .45s ease .3s forwards;opacity:0}
+
+  /* Radio dot */
+  .radio-dot{width:20px;height:20px;border-radius:50%;border:2px solid #cbd5e1;flex-shrink:0;transition:all .15s}
+  .radio-dot.on{border-color:#003580;background:#003580}
+</style>
+<script>
+const SUPABASE_URL  = 'https://pxzooohkufdzpxthhpfv.supabase.co';
+const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4em9vb2hrdWZkenB4dGhocGZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxNDk4NzAsImV4cCI6MjA5MDcyNTg3MH0.wwypVW3SrCXRWKP-9n6T1hT8sLGGPtzanR8mfjAgrdc';
+const PAYPAL_CLIENT_ID = 'TU_PAYPAL_CLIENT_ID';
+const MP_PUBLIC_KEY    = 'TU_MP_PUBLIC_KEY';
+</script>
+</head>
+
+<body x-data="cotizador()" x-init="init()" x-cloak>
+
+<!-- ═══════════════ HEADER ═══════════════ -->
+<header class="sticky top-0 z-50" style="background:#003580;box-shadow:0 2px 8px rgba(0,0,0,.2)">
+  <div class="max-w-5xl mx-auto px-4 pt-3.5 pb-2">
+    <!-- Logo row -->
+    <div class="flex items-center justify-between mb-3">
+      <div class="flex items-center gap-2.5">
+        <img src="https://www.dimapsa.com/assets/img/Logo_dimapsa.png"
+          class="w-9 h-9 object-contain flex-shrink-0" alt="DMP">
+        <div class="leading-tight">
+          <div class="font-black text-white text-[15px]">Dimapsa</div>
+          <div class="text-[11px] font-semibold" style="color:#cc1f1f">Corte Laser</div>
+        </div>
+      </div>
+      <div class="text-[11px] font-bold px-2.5 py-1 rounded-full border" style="color:#93c5fd;border-color:rgba(147,197,253,.3);background:rgba(255,255,255,.08)">
+        Paso <span x-text="screen==='form'?'1':screen==='quote'?'2':'3'"></span>/3
+      </div>
+    </div>
+
+    <!-- Stepper -->
+    <div class="flex items-start">
+      <!-- Step 1 -->
+      <div class="flex flex-col items-center">
+        <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all"
+          :class="screen==='form'
+            ? 'bg-white border-white text-[#003580]'
+            : 'border-white text-white bg-white/20'">
+          <template x-if="screen === 'form'"><span>1</span></template>
+          <template x-if="screen !== 'form'">
+            <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+            </svg>
+          </template>
+        </div>
+        <span class="text-[10px] mt-1 font-semibold text-white/80">Datos</span>
+      </div>
+
+      <div class="step-line" style="background:rgba(255,255,255,.25)" :style="screen!=='form' ? 'background:white' : ''"></div>
+
+      <!-- Step 2 -->
+      <div class="flex flex-col items-center">
+        <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all"
+          :class="screen==='quote'
+            ? 'bg-white border-white text-[#003580]'
+            : screen==='success'
+              ? 'border-white text-white bg-white/20'
+              : 'border-white/30 text-white/40 bg-transparent'">
+          <template x-if="screen === 'success'">
+            <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+            </svg>
+          </template>
+          <template x-if="screen !== 'success'"><span>2</span></template>
+        </div>
+        <span class="text-[10px] mt-1 font-semibold transition-all"
+          :class="screen==='quote'||screen==='success' ? 'text-white/80' : 'text-white/30'">Cotización</span>
+      </div>
+
+      <div class="step-line" :style="screen==='success' ? 'background:white' : 'background:rgba(255,255,255,.25)'"></div>
+
+      <!-- Step 3 -->
+      <div class="flex flex-col items-center">
+        <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all"
+          :class="screen==='success'
+            ? 'bg-green-400 border-green-400 text-white'
+            : 'border-white/30 text-white/40'">
+          <template x-if="screen === 'success'">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+            </svg>
+          </template>
+          <template x-if="screen !== 'success'"><span>3</span></template>
+        </div>
+        <span class="text-[10px] mt-1 font-semibold transition-all"
+          :class="screen==='success' ? 'text-white/80' : 'text-white/30'">Listo</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-5xl mx-auto px-4 py-4 pb-10 space-y-4">
+
+<!-- ═══════════════ SCREEN: FORMULARIO ═══════════════ -->
+<template x-if="screen === 'form'">
+<div class="slide-in">
+<div class="md:grid md:grid-cols-5 md:gap-5 md:items-start">
+
+  <!-- ── COLUMNA IZQUIERDA: formulario ── -->
+  <div class="space-y-4 md:col-span-3">
+
+    <!-- Datos del cliente -->
+    <div class="card p-5">
+      <p class="sec-lbl mb-4">Tu información</p>
+      <div class="space-y-3">
+        <div>
+          <label class="text-xs font-medium text-slate-500 block mb-1.5">Nombre completo *</label>
+          <input x-model="nombre" type="text" placeholder="Juan Pérez" class="inp">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-slate-500 block mb-1.5">Teléfono / WhatsApp *</label>
+          <input x-model="telefono" type="tel" placeholder="81 1234 5678" class="inp">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs font-medium text-slate-500 block mb-1.5">Correo <span class="text-slate-300">(opcional)</span></label>
+            <input x-model="correo" type="email" placeholder="tu@correo.com" class="inp text-sm">
+          </div>
+          <div>
+            <label class="text-xs font-medium text-slate-500 block mb-1.5">Empresa <span class="text-slate-300">(opcional)</span></label>
+            <input x-model="empresa" type="text" placeholder="Mi empresa" class="inp text-sm">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Material y cantidad -->
+    <div class="card p-5">
+      <p class="sec-lbl mb-4">Material y cantidad</p>
+      <div class="grid grid-cols-3 gap-3">
+        <div>
+          <label class="text-xs font-medium text-slate-500 block mb-1.5">Material *</label>
+          <select x-model="material" class="inp text-sm py-3">
+            <option value="A36">Acero A36</option>
+            <option value="INOX" disabled>Inox (pronto)</option>
+            <option value="AL"   disabled>Aluminio (pronto)</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-slate-500 block mb-1.5">Espesor (in) *</label>
+          <input x-model="espesor" type="number" min="0.01" max="3" step="0.01" placeholder="0.25" class="inp py-3">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-slate-500 block mb-1.5">Cantidad *</label>
+          <input x-model="cantidad" type="number" min="1" max="9999" placeholder="1" class="inp py-3">
+        </div>
+      </div>
+    </div>
+
+    <!-- Tipo de pieza -->
+    <div class="card p-5">
+      <p class="sec-lbl mb-4">Tipo de pieza</p>
+
+      <div class="grid grid-cols-3 gap-2.5 mb-4">
+        <template x-for="f in formas" :key="f.id">
+          <button type="button" @click="setForma(f.id)"
+            class="shape-card" :class="forma === f.id ? 'sel' : ''">
+            <div class="w-11 h-11 flex items-center justify-center" x-html="f.icono"></div>
+            <span class="text-[11px] font-semibold text-slate-700" x-text="f.nombre"></span>
+          </button>
+        </template>
+      </div>
+
+      <!-- Preview integrado: solo móvil (desktop lo muestra en el sidebar) -->
+      <div class="md:hidden bg-slate-50 rounded-2xl px-4 pt-4 pb-3 mb-4">
+        <div class="flex justify-center">
+          <div class="w-40 h-32 flex items-center justify-center" x-html="shapePreviewSVG()"></div>
+        </div>
+      </div>
+
+      <!-- Dimensiones -->
+      <div class="mb-4">
+        <template x-if="forma === 'rectangulo'">
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label class="text-xs font-medium text-slate-500 block mb-1">Largo (in) *</label>
+              <input x-model.number="dims.largo" type="number" min="0.01" step="0.01" placeholder="20" class="inp py-2.5 text-sm">
+            </div>
+            <div>
+              <label class="text-xs font-medium text-slate-500 block mb-1">Ancho (in) *</label>
+              <input x-model.number="dims.ancho" type="number" min="0.01" step="0.01" placeholder="12" class="inp py-2.5 text-sm">
+            </div>
+          </div>
+        </template>
+        <template x-if="forma === 'cuadrado'">
+          <div>
+            <label class="text-xs font-medium text-slate-500 block mb-1">Lado (in) *</label>
+            <input x-model.number="dims.lado" type="number" min="0.01" step="0.01" placeholder="8" class="inp py-2.5">
+          </div>
+        </template>
+        <template x-if="forma === 'circulo'">
+          <div>
+            <label class="text-xs font-medium text-slate-500 block mb-1">Diámetro (in) *</label>
+            <input x-model.number="dims.diametro" type="number" min="0.01" step="0.01" placeholder="6" class="inp py-2.5">
+          </div>
+        </template>
+        <template x-if="forma === 'triangulo'">
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label class="text-xs font-medium text-slate-500 block mb-1">Base (in) *</label>
+              <input x-model.number="dims.base" type="number" min="0.01" step="0.01" placeholder="8" class="inp py-2.5 text-sm">
+            </div>
+            <div>
+              <label class="text-xs font-medium text-slate-500 block mb-1">Altura (in) *</label>
+              <input x-model.number="dims.altura" type="number" min="0.01" step="0.01" placeholder="7" class="inp py-2.5 text-sm">
+            </div>
+          </div>
+        </template>
+        <template x-if="forma === 'anillo'">
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label class="text-xs font-medium text-slate-500 block mb-1">Diám. exterior (in) *</label>
+              <input x-model.number="dims.diametro_ext" type="number" min="0.01" step="0.01" placeholder="8" class="inp py-2.5 text-sm">
+            </div>
+            <div>
+              <label class="text-xs font-medium text-slate-500 block mb-1">Diám. interior (in) *</label>
+              <input x-model.number="dims.diametro_int" type="number" min="0.01" step="0.01" placeholder="4" class="inp py-2.5 text-sm">
+            </div>
+          </div>
+        </template>
+        <template x-if="forma === 'trapecio'">
+          <div class="space-y-2.5">
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label class="text-xs font-medium text-slate-500 block mb-1">Base mayor (in) *</label>
+                <input x-model.number="dims.base_mayor" type="number" min="0.01" step="0.01" placeholder="12" class="inp py-2.5 text-sm">
+              </div>
+              <div>
+                <label class="text-xs font-medium text-slate-500 block mb-1">Base menor (in) *</label>
+                <input x-model.number="dims.base_menor" type="number" min="0.01" step="0.01" placeholder="6" class="inp py-2.5 text-sm">
+              </div>
+            </div>
+            <div>
+              <label class="text-xs font-medium text-slate-500 block mb-1">Altura (in) *</label>
+              <input x-model.number="dims.altura" type="number" min="0.01" step="0.01" placeholder="8" class="inp py-2.5">
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- Observaciones -->
+      <div>
+        <label class="text-xs font-medium text-slate-500 block mb-1.5">
+          Observaciones <span class="text-slate-300">(opcional)</span>
+        </label>
+        <textarea x-model="observaciones" rows="2"
+          placeholder="Acabados, tolerancias, instrucciones especiales..."
+          class="inp text-sm"></textarea>
+      </div>
+    </div>
+
+  </div><!-- /columna izquierda -->
+
+  <!-- ── COLUMNA DERECHA: preview + precio + CTA ── -->
+  <div class="md:col-span-2 md:sticky md:top-20 space-y-4 mt-4 md:mt-0">
+
+    <!-- Vista previa — visible solo en desktop -->
+    <div class="hidden md:block card p-5">
+      <p class="sec-lbl mb-3">Vista previa</p>
+      <div class="flex justify-center py-2">
+        <div class="w-full flex items-center justify-center" style="max-width:240px;height:180px" x-html="shapePreviewSVG()"></div>
+      </div>
+    </div>
+
+    <!-- Precio en vivo -->
+    <div x-show="!precio" class="text-center text-slate-400 text-sm py-5 border-2 border-dashed border-slate-200 rounded-2xl bg-white">
+      Ingresa espesor y dimensiones para ver el precio
+    </div>
+
+    <div x-show="precio" class="card overflow-hidden">
+      <div class="px-5 pt-5 pb-4" style="background:linear-gradient(135deg,#eff4ff,#dbeafe)">
+        <div class="flex items-center justify-between mb-3">
+          <span class="sec-lbl">Precio estimado</span>
+          <span class="text-xs text-slate-500 font-medium" x-text="'× ' + (cantidad||1) + ' pza(s)'"></span>
+        </div>
+        <template x-if="precio">
+          <div>
+            <div class="flex justify-between text-sm text-slate-600 mb-1">
+              <span>Precio unitario</span>
+              <span x-text="formatPeso(precio.precio_unitario)"></span>
+            </div>
+            <div class="flex justify-between text-sm text-green-700 mb-3">
+              <span>Descuento scrap ♻️</span>
+              <span x-text="'-' + formatPeso(precio.descuento_scrap / (cantidad||1))"></span>
+            </div>
+            <div style="border-top:1.5px solid #bfdbfe" class="pt-3 flex justify-between items-center">
+              <span class="font-bold text-slate-900">TOTAL</span>
+              <span class="text-3xl font-black" style="color:#003580" x-text="formatPeso(precio.precio_total)"></span>
+            </div>
+            <p class="text-xs text-slate-400 text-right mt-1">Precio sin IVA</p>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- Error -->
+    <div x-show="errorMsg" class="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700 font-medium" x-text="errorMsg"></div>
+
+    <!-- CTA -->
+    <button @click="generarCotizacion()" type="button" class="btn-primary w-full py-4 text-base">
+      Ver mi cotización →
+    </button>
+
+  </div><!-- /columna derecha -->
+
+</div>
+</div>
+</template>
+
+<!-- ═══════════════ SCREEN: COTIZACIÓN ═══════════════ -->
+<template x-if="screen === 'quote'">
+<div class="space-y-4 slide-in max-w-2xl mx-auto">
+
+  <div class="card overflow-hidden">
+    <!-- Header azul -->
+    <div class="px-5 py-4" style="background:#003580">
+      <div class="flex items-start justify-between">
+        <div>
+          <div class="flex items-center gap-2 mb-1">
+            <img src="https://www.dimapsa.com/assets/img/Logo_dimapsa.png" class="w-7 h-7 object-contain" alt="DMP">
+            <p style="color:rgba(147,197,253,.8)" class="text-[10px] font-bold uppercase tracking-widest">Cotización</p>
+          </div>
+          <p class="text-white font-black text-xl" x-text="numeroPedido"></p>
+          <p style="color:rgba(147,197,253,.7)" class="text-xs mt-0.5" x-text="fechaHoy"></p>
+        </div>
+        <button @click="descargarPDF()" type="button"
+          class="flex items-center gap-1.5 text-white text-xs font-semibold px-3 py-2 rounded-xl border border-white/30 bg-white/15 active:bg-white/25 transition-all">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+          </svg>
+          PDF
+        </button>
+      </div>
+    </div>
+
+    <div class="px-5 py-4 space-y-4">
+      <!-- Cliente -->
+      <div>
+        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Cliente</p>
+        <p class="font-bold text-slate-900" x-text="nombre"></p>
+        <p class="text-slate-500 text-sm" x-text="telefono"></p>
+        <p class="text-slate-500 text-sm" x-show="correo" x-text="correo"></p>
+        <p class="text-slate-400 text-sm" x-show="empresa" x-text="empresa"></p>
+      </div>
+      <div style="border-top:1.5px solid #f1f5f9"></div>
+      <!-- Specs -->
+      <div>
+        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Especificaciones</p>
+        <div class="grid grid-cols-2 gap-y-2 text-sm">
+          <span class="text-slate-500">Pieza</span>
+          <span class="font-medium text-slate-900 capitalize" x-text="formaActual.nombre"></span>
+          <span class="text-slate-500">Material</span>
+          <span class="font-medium text-slate-900" x-text="material"></span>
+          <span class="text-slate-500">Espesor</span>
+          <span class="font-medium text-slate-900" x-text='espesor + "\""'></span>
+          <span class="text-slate-500">Cantidad</span>
+          <span class="font-medium text-slate-900" x-text="cantidad + ' pza(s)'"></span>
+          <template x-for="campo in formaActual.campos" :key="campo.id">
+            <>
+              <span class="text-slate-500" x-text="campo.label"></span>
+              <span class="font-medium text-slate-900" x-text='(dims[campo.id] || "—") + "\""'></span>
+            </>
+          </template>
+        </div>
+        <p class="text-sm text-slate-500 mt-2 italic" x-show="observaciones" x-text="'Obs: ' + observaciones"></p>
+      </div>
+      <div style="border-top:1.5px solid #f1f5f9"></div>
+      <!-- Precios -->
+      <div>
+        <div class="space-y-2 text-sm mb-3">
+          <div class="flex justify-between text-slate-600">
+            <span>Precio unitario</span>
+            <span x-text="formatPeso(cotizacion.precio_unitario)"></span>
+          </div>
+          <div class="flex justify-between text-slate-600">
+            <span>Cantidad</span>
+            <span x-text="'×' + cantidad"></span>
+          </div>
+          <div class="flex justify-between text-green-700">
+            <span>Descuento scrap ♻️</span>
+            <span x-text="'−' + formatPeso(cotizacion.descuento_scrap)"></span>
+          </div>
+        </div>
+        <div class="rounded-2xl px-4 py-3 flex justify-between items-center" style="background:#eff4ff">
+          <span class="font-bold text-slate-900">TOTAL</span>
+          <span class="text-2xl font-black" style="color:#003580" x-text="formatPeso(cotizacion.precio_total)"></span>
+        </div>
+        <p class="text-xs text-slate-400 text-center mt-2">Precio no incluye IVA</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Método de pago -->
+  <div class="card p-5">
+    <p class="sec-lbl mb-4">¿Cómo deseas pagar?</p>
+    <div class="space-y-3">
+      <button type="button" @click="metodoPago = 'paypal'"
+        class="pay-opt" :class="metodoPago === 'paypal' ? 'sel' : ''">
+        <div class="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+          <svg class="w-6 h-6 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.983 5.05-4.349 6.797-8.647 6.797h-2.19c-.524 0-.968.382-1.05.9l-1.12 7.106zm14.146-14.42a3.35 3.35 0 0 0-.607-.541c-.013.076-.026.175-.041.254-.93 4.778-4.005 7.201-9.138 7.201h-2.19a.563.563 0 0 0-.556.479l-1.187 7.527h-.506l-.24 1.516a.56.56 0 0 0 .554.647h3.882c.46 0 .85-.334.922-.788.06-.26.76-4.852.816-5.09a.932.932 0 0 1 .923-.788h.58c3.76 0 6.705-1.528 7.565-5.946.36-1.847.174-3.388-.777-4.471z"/>
+          </svg>
+        </div>
+        <div class="flex-1">
+          <p class="font-semibold text-slate-900 text-sm">PayPal / Tarjeta</p>
+          <p class="text-xs text-slate-500">Pago en línea seguro</p>
+        </div>
+        <div class="radio-dot" :class="metodoPago === 'paypal' ? 'on' : ''"></div>
+      </button>
+
+      <button type="button" @click="metodoPago = 'mercadopago'"
+        class="pay-opt" :class="metodoPago === 'mercadopago' ? 'sel' : ''">
+        <div class="w-11 h-11 rounded-xl bg-sky-50 flex items-center justify-center flex-shrink-0">
+          <svg class="w-6 h-6 text-sky-500" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.374 0 0 5.373 0 12c0 6.628 5.374 12 12 12s12-5.372 12-12c0-6.627-5.374-12-12-12zm5.92 8.806l-3.11 3.11a2.003 2.003 0 0 1-2.83 0l-.3-.3a2.003 2.003 0 0 1 0-2.83l3.11-3.11a5.994 5.994 0 0 0-5.06 1.386l4.193 4.194a1 1 0 0 1 0 1.414l-4.193 4.193a6 6 0 0 0 8.19-8.057zm-11.84 6.387l3.11-3.11a2.003 2.003 0 0 1 2.83 0l.3.3a2.003 2.003 0 0 1 0 2.83l-3.11 3.11a5.994 5.994 0 0 0 5.06-1.386L9.977 12.74a1 1 0 0 1 0-1.414l4.193-4.193a6 6 0 0 0-8.09 8.06z"/>
+          </svg>
+        </div>
+        <div class="flex-1">
+          <p class="font-semibold text-slate-900 text-sm">Mercado Pago</p>
+          <p class="text-xs text-slate-500">Tarjeta · OXXO · transferencia</p>
+        </div>
+        <div class="radio-dot" :class="metodoPago === 'mercadopago' ? 'on' : ''"></div>
+      </button>
+
+      <button type="button" @click="metodoPago = 'caja'"
+        class="pay-opt" :class="metodoPago === 'caja' ? 'sel' : ''">
+        <div class="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0">
+          <svg class="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+          </svg>
+        </div>
+        <div class="flex-1">
+          <p class="font-semibold text-slate-900 text-sm">Pagar en caja</p>
+          <p class="text-xs text-slate-500">Efectivo o tarjeta · en sucursal</p>
+        </div>
+        <div class="radio-dot" :class="metodoPago === 'caja' ? 'on' : ''"></div>
+      </button>
+    </div>
+  </div>
+
+  <div x-show="errorMsg" class="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700 font-medium" x-text="errorMsg"></div>
+
+  <div class="flex gap-3">
+    <button @click="screen = 'form'; errorMsg = ''" type="button" class="btn-ghost flex-1 py-4 text-sm">
+      ← Editar
+    </button>
+    <button @click="confirmarPedido()" :disabled="loading" type="button" class="btn-primary py-4 text-base" style="flex:2">
+      <span x-show="!loading">Confirmar pedido</span>
+      <span x-show="loading">Procesando...</span>
+    </button>
+  </div>
+
+</div>
+</template>
+
+<!-- ═══════════════ SCREEN: ÉXITO ═══════════════ -->
+<template x-if="screen === 'success'">
+<div class="space-y-4 max-w-md mx-auto">
+  <div class="card p-7 text-center">
+    <div class="scale-in w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-5" style="background:#dcfce7">
+      <svg class="w-10 h-10" viewBox="0 0 40 40" fill="none">
+        <path class="check-path" d="M10 21 L17 28 L30 13"
+          stroke="#16a34a" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <h2 class="text-2xl font-black text-slate-900 mb-1 fade-up">¡Pedido registrado!</h2>
+    <p class="text-slate-500 text-sm mb-5 fade-up">Tu cotización fue guardada correctamente</p>
+
+    <div class="inline-block rounded-2xl px-6 py-3 mb-5 border" style="background:#eff4ff;border-color:#bfdbfe">
+      <p class="text-[10px] font-bold uppercase tracking-widest mb-1" style="color:#003580">Número de pedido</p>
+      <p class="font-mono font-black text-xl" style="color:#003580" x-text="numeroPedido"></p>
+    </div>
+
+    <template x-if="metodoPago === 'caja'">
+      <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-left mb-4">
+        <div class="flex gap-3 items-start">
+          <div class="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+          <div>
+            <p class="font-semibold text-amber-900 text-sm mb-1">Siguiente paso</p>
+            <p class="text-amber-800 text-sm">Presenta este número en caja para realizar tu pago.</p>
+            <p class="font-black text-xl text-amber-900 mt-2" x-text="formatPeso(cotizacion ? cotizacion.precio_total : 0)"></p>
+          </div>
+        </div>
+      </div>
+    </template>
+    <template x-if="metodoPago !== 'caja'">
+      <div class="bg-green-50 border border-green-200 rounded-2xl p-4 text-left mb-4">
+        <p class="font-semibold text-green-900 text-sm">✅ Pago procesado correctamente</p>
+        <p class="text-green-700 text-sm mt-1">Tu pedido está confirmado.</p>
+      </div>
+    </template>
+
+    <div class="bg-slate-50 rounded-2xl p-3 text-sm text-left mb-5">
+      <p class="text-slate-400 text-xs mb-1">Teléfono registrado</p>
+      <p class="font-semibold text-slate-900" x-text="telefono"></p>
+      <p class="text-slate-400 text-xs mt-2">Guarda tu número de pedido para cuando pases a recoger.</p>
+    </div>
+
+    <button @click="descargarPDF()" type="button" class="btn-ghost w-full py-3.5 text-sm gap-2 mb-3">
+      <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+      </svg>
+      Descargar PDF de cotización
+    </button>
+    <button @click="reiniciar()" type="button" class="btn-primary w-full py-4 text-base">
+      Nueva cotización
+    </button>
+  </div>
+</div>
+</template>
+
+</main>
+
+<footer class="text-center text-xs text-slate-400 py-5">
+  Dimapsa Comercialización · Corte Laser a la Medida
+</footer>
+
+<script>
+function cotizador() {
+  return {
+    _db:           null,
+    _tablaLaser:   'cotizaciones_laser',
+    _tablaPedidos: 'pedidos_dimapsa',
+
+    screen: 'form',
+    loading: false,
+    errorMsg: '',
+
+    nombre: '', telefono: '', correo: '', empresa: '',
+    sucursal: 'principal', sucursalNombre: '',
+
+    forma: 'rectangulo',
+    material: 'A36',
+    espesor: '',
+    cantidad: 1,
+    dims: {},
+    observaciones: '',
+
+    metodoPago: null,
+    cotizacion: null,
+    numeroPedido: '',
+    fechaHoy: '',
+
+    precios: { venta: 30, bonificacion: 3, compra: 18 },
+
+    formas: [
+      {
+        id: 'rectangulo', nombre: 'Rectángulo',
+        campos: [
+          { id: 'largo', label: 'Largo', placeholder: '20' },
+          { id: 'ancho', label: 'Ancho', placeholder: '12' },
+        ],
+        icono: `<svg viewBox="0 0 40 40" fill="none" stroke="#003580" stroke-width="2.5" class="w-full h-full">
+          <rect x="5" y="12" width="30" height="16" rx="1.5"/>
+        </svg>`
+      },
+      {
+        id: 'cuadrado', nombre: 'Cuadrado',
+        campos: [{ id: 'lado', label: 'Lado', placeholder: '8' }],
+        icono: `<svg viewBox="0 0 40 40" fill="none" stroke="#003580" stroke-width="2.5" class="w-full h-full">
+          <rect x="8" y="8" width="24" height="24" rx="1.5"/>
+        </svg>`
+      },
+      {
+        id: 'circulo', nombre: 'Círculo',
+        campos: [{ id: 'diametro', label: 'Diámetro', placeholder: '6' }],
+        icono: `<svg viewBox="0 0 40 40" fill="none" stroke="#003580" stroke-width="2.5" class="w-full h-full">
+          <circle cx="20" cy="20" r="13"/>
+        </svg>`
+      },
+      {
+        id: 'triangulo', nombre: 'Triángulo',
+        campos: [
+          { id: 'base',   label: 'Base',   placeholder: '8' },
+          { id: 'altura', label: 'Altura',  placeholder: '7' },
+        ],
+        icono: `<svg viewBox="0 0 40 40" fill="none" stroke="#003580" stroke-width="2.5" class="w-full h-full">
+          <polygon points="20,5 35,35 5,35"/>
+        </svg>`
+      },
+      {
+        id: 'anillo', nombre: 'Anillo',
+        campos: [
+          { id: 'diametro_ext', label: 'Diám. exterior', placeholder: '8' },
+          { id: 'diametro_int', label: 'Diám. interior', placeholder: '4' },
+        ],
+        icono: `<svg viewBox="0 0 40 40" fill="none" stroke="#003580" stroke-width="2.5" class="w-full h-full">
+          <circle cx="20" cy="20" r="13"/>
+          <circle cx="20" cy="20" r="7"/>
+        </svg>`
+      },
+      {
+        id: 'trapecio', nombre: 'Trapecio',
+        campos: [
+          { id: 'base_mayor', label: 'Base mayor', placeholder: '12' },
+          { id: 'base_menor', label: 'Base menor', placeholder: '6' },
+          { id: 'altura',     label: 'Altura',      placeholder: '8' },
+        ],
+        icono: `<svg viewBox="0 0 40 40" fill="none" stroke="#003580" stroke-width="2.5" class="w-full h-full">
+          <polygon points="10,35 30,35 25,10 15,10"/>
+        </svg>`
+      },
+    ],
+
+    get formaActual() {
+      return this.formas.find(f => f.id === this.forma) || this.formas[0];
+    },
+
+    get precio() {
+      return this.calcularPrecio();
+    },
+
+    // ── SVG preview ───────────────────────────────────
+    shapePreviewSVG() {
+      const d  = this.dims;
+      const bl = '#003580';
+      const fi = '#eff4ff';
+      const sw = '2.5';
+      const F  = 'font-family="system-ui,sans-serif" font-size="9" fill="#64748b" text-anchor="middle"';
+
+      switch(this.forma) {
+        case 'circulo': {
+          const lbl = d.diametro ? `⌀ ${d.diametro}"` : 'Diámetro';
+          return `<svg viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="60" cy="52" r="38" fill="${fi}" stroke="${bl}" stroke-width="${sw}"/>
+            <line x1="22" y1="52" x2="98" y2="52" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4,3"/>
+            <text x="60" y="48" ${F}>${lbl}</text>
+          </svg>`;
+        }
+        case 'cuadrado': {
+          const lbl = d.lado ? `${d.lado}"` : 'Lado';
+          return `<svg viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="10" width="80" height="80" fill="${fi}" stroke="${bl}" stroke-width="${sw}"/>
+            <text x="60" y="55" ${F}>${lbl}</text>
+          </svg>`;
+        }
+        case 'rectangulo': {
+          const lbl = (d.largo && d.ancho) ? `${d.largo}" × ${d.ancho}"` : 'Largo × Ancho';
+          return `<svg viewBox="0 0 160 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="8" y="18" width="144" height="54" fill="${fi}" stroke="${bl}" stroke-width="${sw}"/>
+            <text x="80" y="48" font-family="system-ui,sans-serif" font-size="9" fill="#64748b" text-anchor="middle">${lbl}</text>
+          </svg>`;
+        }
+        case 'triangulo': {
+          const lbl = (d.base && d.altura) ? `B:${d.base}" H:${d.altura}"` : 'Base / Altura';
+          return `<svg viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <polygon points="60,8 108,92 12,92" fill="${fi}" stroke="${bl}" stroke-width="${sw}"/>
+            <text x="60" y="82" ${F}>${lbl}</text>
+          </svg>`;
+        }
+        case 'anillo': {
+          const lbl = d.diametro_ext ? `⌀${d.diametro_ext}"/${d.diametro_int||'?'}"` : 'Ext / Int';
+          return `<svg viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="60" cy="50" r="40" fill="${fi}" stroke="${bl}" stroke-width="${sw}"/>
+            <circle cx="60" cy="50" r="18" fill="white" stroke="${bl}" stroke-width="${sw}"/>
+            <text x="60" y="54" ${F}>${lbl}</text>
+          </svg>`;
+        }
+        case 'trapecio': {
+          const lbl = d.base_mayor ? `${d.base_mayor}"/${d.base_menor||'?'}"` : 'Base mayor/menor';
+          return `<svg viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <polygon points="20,90 100,90 82,14 38,14" fill="${fi}" stroke="${bl}" stroke-width="${sw}"/>
+            <text x="60" y="80" ${F}>${lbl}</text>
+          </svg>`;
+        }
+        default:
+          return `<svg viewBox="0 0 120 100"><text x="60" y="55" font-family="system-ui" font-size="10" fill="#94a3b8" text-anchor="middle">Selecciona una forma</text></svg>`;
+      }
+    },
+
+    // ── Init ──────────────────────────────────────────
+    async init() {
+      try {
+        this._db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      } catch(e) {
+        console.warn('Supabase no disponible:', e.message);
+      }
+      const params = new URLSearchParams(window.location.search);
+      this.sucursal = params.get('sucursal') || 'principal';
+      const now = new Date();
+      this.fechaHoy = now.toLocaleDateString('es-MX', { year:'numeric', month:'long', day:'numeric' });
+      await this.cargarPrecios();
+      await this.cargarSucursal();
+      const pagoStatus  = params.get('pago');
+      const pedidoParam = params.get('pedido');
+      if (pagoStatus === 'exitoso' && pedidoParam) {
+        this.numeroPedido = pedidoParam;
+        this.screen = 'success';
+      }
+    },
+
+    async cargarPrecios() {
+      if (!this._db) return;
+      try {
+        const { data, error } = await this._db
+          .from('laser_config_precios').select('*').eq('id', 1).single();
+        if (!error && data) {
+          this.precios.venta        = parseFloat(data.precio_venta_kg)        || 30;
+          this.precios.bonificacion = parseFloat(data.precio_bonificacion_kg) || 3;
+          this.precios.compra       = parseFloat(data.precio_compra_kg)       || 18;
+        }
+      } catch (_) {}
+    },
+
+    async cargarSucursal() {
+      if (!this._db) return;
+      try {
+        const { data } = await this._db
+          .from('laser_sucursales').select('nombre').eq('id', this.sucursal).single();
+        if (data) this.sucursalNombre = data.nombre;
+      } catch (_) {}
+    },
+
+    setForma(id) { this.forma = id; this.dims = {}; },
+
+    // ── Cálculo de precio ─────────────────────────────
+    calcularPrecio() {
+      if (!this.espesor || parseFloat(this.espesor) <= 0) return null;
+      if (!this.formaActual) return null;
+      if (!this.tieneDimensiones()) return null;
+
+      const E   = parseFloat(this.espesor);  // ya en pulgadas
+      const ρ   = 0.13;
+      const qty = Math.max(1, parseInt(this.cantidad) || 1);
+      const d   = this.dims;
+
+      let area_venta = 0, kerf_int = 0, kerf_ext = 0, area_total = 0;
+
+      switch (this.forma) {
+        case 'circulo': {
+          const D    = parseFloat(d.diametro);
+          area_venta = Math.PI * (D / 2) ** 2;
+          kerf_int   = (E * 0.08) * (Math.PI * D);
+          kerf_ext   = (D * 4)   * (E * 0.08);
+          area_total = D ** 2    + kerf_ext;
+          break;
+        }
+        case 'cuadrado': {
+          const L    = parseFloat(d.lado);
+          area_venta = L ** 2;
+          kerf_int   = 0;
+          kerf_ext   = (0.08 * E) * (4 * L);
+          area_total = L ** 2 + kerf_ext;
+          break;
+        }
+        case 'rectangulo': {
+          const L1   = parseFloat(d.largo);
+          const L2   = parseFloat(d.ancho);
+          area_venta = L1 * L2;
+          kerf_int   = 0;
+          kerf_ext   = (0.08 * E) * (2 * L1 + 2 * L2);
+          area_total = L1 * L2 + kerf_ext;
+          break;
+        }
+        case 'triangulo': {
+          const B    = parseFloat(d.base);
+          const H    = parseFloat(d.altura);
+          area_venta = (B * H) / 2;
+          kerf_int   = (H + H + B)     * (0.08 * E);
+          kerf_ext   = (B + B + H + H) * (0.08 * E);
+          area_total = H * B + kerf_ext;
+          break;
+        }
+        case 'anillo': {
+          const De   = parseFloat(d.diametro_ext);
+          const Di   = parseFloat(d.diametro_int);
+          area_venta = Math.PI * (De / 2) ** 2 - Math.PI * (Di / 2) ** 2;
+          kerf_int   = (E * 0.08) * (Math.PI * De) + (E * 0.08) * (Math.PI * Di);
+          kerf_ext   = (De * 4)   * (E * 0.08);
+          area_total = De ** 2    + kerf_ext;
+          break;
+        }
+        case 'trapecio': {
+          const H    = parseFloat(d.altura);
+          const Bmin = parseFloat(d.base_menor);
+          const BMay = parseFloat(d.base_mayor);
+          area_venta = ((Bmin + BMay) * H) / 2;
+          kerf_int   = (0.08 * E) * (H + H + Bmin + BMay);
+          kerf_ext   = (Math.max(H, Bmin, BMay) * 4) * (E * 0.08);
+          const sorted = [H, Bmin, BMay].sort((a, b) => b - a);
+          area_total   = sorted[0] * sorted[1] + kerf_ext;
+          break;
+        }
+        default: return null;
+      }
+
+      const desperdicio      = Math.max(0, area_total - kerf_int - area_venta);
+      const masa_total       = area_total  * E * ρ;
+      const masa_desperdicio = desperdicio * E * ρ;
+      const precio_unit      = masa_total * this.precios.venta - masa_desperdicio * this.precios.bonificacion * 0.5;
+      const descuento_unit   = masa_desperdicio * this.precios.bonificacion * 0.5;
+
+      return {
+        precio_unitario: Math.max(0, precio_unit),
+        precio_total:    Math.max(0, precio_unit) * qty,
+        descuento_scrap: descuento_unit * qty,
+        masa_total, masa_desperdicio, area_venta, area_total, desperdicio,
+      };
+    },
+
+    tieneDimensiones() {
+      const required = {
+        rectangulo: ['largo','ancho'], cuadrado:['lado'], circulo:['diametro'],
+        triangulo:['base','altura'], anillo:['diametro_ext','diametro_int'],
+        trapecio:['base_mayor','base_menor','altura'],
+      };
+      return (required[this.forma]||[]).every(k => this.dims[k] && Number(this.dims[k]) > 0);
+    },
+
+    // ── Flujo de cotización ───────────────────────────
+    generarCotizacion() {
+      this.errorMsg = '';
+      if (!this.nombre.trim() || !this.telefono.trim()) {
+        this.errorMsg = 'Por favor ingresa tu nombre y teléfono.'; return;
+      }
+      if (!this.espesor || parseFloat(this.espesor) <= 0) {
+        this.errorMsg = 'Por favor ingresa el espesor.'; return;
+      }
+      if (!this.tieneDimensiones()) {
+        this.errorMsg = 'Por favor ingresa todas las dimensiones.'; return;
+      }
+      this.cotizacion   = this.calcularPrecio();
+      this.numeroPedido = this.generarNumero();
+      this.screen       = 'quote';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+
+    generarNumero() {
+      const n = new Date();
+      const d = [n.getFullYear(), n.getMonth()+1, n.getDate()].map(x=>String(x).padStart(2,'0')).join('');
+      return `CL-${d}-${Math.floor(1000 + Math.random() * 9000)}`;
+    },
+
+    async confirmarPedido() {
+      this.errorMsg = '';
+      if (!this.metodoPago) { this.errorMsg = 'Selecciona un método de pago.'; return; }
+      if (this.metodoPago === 'paypal')       await this.pagarPayPal();
+      else if (this.metodoPago === 'mercadopago') await this.pagarMercadoPago();
+      else await this.guardarPedido('pendiente_caja');
+    },
+
+    async guardarPedido(estadoPago = 'pendiente_caja', paymentId = null) {
+      this.loading  = true;
+      this.errorMsg = '';
+      if (!this._db) {
+        this.screen = 'success';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        this.loading = false;
+        return;
+      }
+      try {
+        const r2 = (n) => Math.round((n || 0) * 100) / 100;
+        const laserPayload = {
+          numero_pedido: this.numeroPedido, sucursal: this.sucursal,
+          nombre: this.nombre, telefono: this.telefono,
+          correo: this.correo||null, empresa: this.empresa||null,
+          forma: this.forma, material: this.material,
+          espesor_mm: parseFloat(this.espesor), cantidad: parseInt(this.cantidad),
+          dimensiones: this.dims, observaciones: this.observaciones||null,
+          precio_unitario: r2(this.cotizacion.precio_unitario),
+          precio_total: r2(this.cotizacion.precio_total),
+          descuento_scrap: r2(this.cotizacion.descuento_scrap),
+          masa_total_kg: r2(this.cotizacion.masa_total),
+          masa_desperdicio_kg: r2(this.cotizacion.masa_desperdicio),
+          metodo_pago: this.metodoPago, estado_pago: estadoPago,
+          payment_id: paymentId||null,
+          precio_venta_kg_snap: this.precios.venta,
+          precio_bonificacion_kg_snap: this.precios.bonificacion,
+        };
+        const { error: laserError } = await this._db
+          .from(this._tablaLaser).insert(laserPayload).select('id').single();
+        if (laserError) {
+          this.errorMsg = `Error al guardar: ${laserError.message} (${laserError.code})`; return;
+        }
+        const dimLabel   = Object.entries(this.dims).map(([k,v]) => `${k}: ${v}"`).join(' | ');
+        const notaResumen =
+          `CORTE LASER | ${this.forma.toUpperCase()} | ${dimLabel} | ` +
+          `Espesor: ${this.espesor}" | Mat: ${this.material} | Cant: ${this.cantidad} pza(s) | ` +
+          `Cliente: ${this.nombre} ${this.telefono} | ` +
+          `Total: $${r2(this.cotizacion.precio_total).toLocaleString('es-MX')} | Pago: ${this.metodoPago}`;
+        const { error: dimError } = await this._db.from(this._tablaPedidos).insert({
+          id_producto: null, cantidad: String(this.cantidad),
+          "Status": estadoPago === 'pagado' ? 'LASER - PAGADO' : 'LASER - PENDIENTE',
+          "Num_pedido": this.numeroPedido, id_user: null, notas: notaResumen,
+        });
+        if (dimError) console.warn('Aviso pedidos_dimapsa:', dimError.message);
+        this.screen = 'success';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch (err) {
+        this.errorMsg = 'Error inesperado: ' + err.message;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async pagarPayPal() {
+      this.loading = true;
+      try {
+        const res  = await fetch('api/paypal-create.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ total: this.cotizacion.precio_total, pedido_id: this.numeroPedido }) });
+        const data = await res.json();
+        if (data.approve_url) { await this.guardarPedido('pendiente_pago'); window.location.href = data.approve_url; }
+        else this.errorMsg = 'No se pudo iniciar el pago con PayPal.';
+      } catch { this.errorMsg = 'Error al conectar con PayPal.'; }
+      finally  { this.loading = false; }
+    },
+
+    async pagarMercadoPago() {
+      this.loading = true;
+      try {
+        const res  = await fetch('api/mp-preference.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ total: this.cotizacion.precio_total, pedido_id: this.numeroPedido, nombre: this.nombre, telefono: this.telefono }) });
+        const data = await res.json();
+        const url  = data.init_point || data.sandbox_init;
+        if (url) { await this.guardarPedido('pendiente_pago'); window.location.href = url; }
+        else this.errorMsg = 'No se pudo iniciar el pago con Mercado Pago.';
+      } catch { this.errorMsg = 'Error al conectar con Mercado Pago.'; }
+      finally  { this.loading = false; }
+    },
+
+    // ── PDF — diseño limpio profesional ──────────────
+    async descargarPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+      const c   = this.cotizacion;
+      const pv  = (n) => new Intl.NumberFormat('es-MX', { style:'currency', currency:'MXN' }).format(n||0);
+
+      const PW = 210, ML = 14, CW = 182;
+      // Colores Dimapsa
+      const AZUL = [0, 53, 128];    // #003580
+      const ROJO = [204, 31, 31];   // #cc1f1f
+      const GRIS_HEADER = [232, 240, 251]; // encabezado de sección muy claro
+      const TEXTO = [30, 30, 30];
+      const TEXTO2 = [100, 100, 100];
+      const LINEA = [220, 220, 220];
+
+      // ── Intentar cargar logo ──────────────────────
+      let logoData = null;
+      try {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        await new Promise((res, rej) => {
+          img.onload = res; img.onerror = rej;
+          img.src = 'https://www.dimapsa.com/assets/img/Logo_dimapsa.png';
+          setTimeout(rej, 3000);
+        });
+        const cv  = document.createElement('canvas');
+        cv.width  = img.naturalWidth;
+        cv.height = img.naturalHeight;
+        const ctx = cv.getContext('2d');
+        ctx.fillStyle = '#003580';
+        ctx.fillRect(0, 0, cv.width, cv.height);
+        ctx.drawImage(img, 0, 0);
+        logoData = cv.toDataURL('image/png');
+      } catch(_) {}
+
+      // ── HEADER azul ───────────────────────────────
+      doc.setFillColor(...AZUL);
+      doc.rect(0, 0, PW, 32, 'F');
+
+      if (logoData) {
+        doc.addImage(logoData, 'PNG', ML, 5, 22, 22);
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+        doc.text('DIMAPSA COMERCIALIZACIÓN', ML + 26, 14);
+        doc.setFontSize(8.5); doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...[180, 210, 255]);
+        doc.text('Corte Laser a la Medida', ML + 26, 21);
+      } else {
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(15); doc.setFont('helvetica', 'bold');
+        doc.text('DIMAPSA COMERCIALIZACIÓN', ML, 14);
+        doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+        doc.setTextColor(180, 210, 255);
+        doc.text('Corte Laser a la Medida', ML, 22);
+      }
+
+      // Número de cotización (derecha)
+      doc.setTextColor(180, 210, 255);
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'normal');
+      doc.text('COTIZACIÓN', PW - ML, 9, { align: 'right' });
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+      doc.text(this.numeroPedido, PW - ML, 17, { align: 'right' });
+      doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+      doc.setTextColor(180, 210, 255);
+      doc.text(this.fechaHoy, PW - ML, 24, { align: 'right' });
+
+      let y = 38;
+
+      // ── Helper: sección con tabla ─────────────────
+      const seccion = (titulo, filas) => {
+        const RH = 7;                         // row height
+        const TH = 8;                         // title row height
+        const H  = TH + filas.length * RH;
+
+        // Borde exterior de la sección
+        doc.setDrawColor(...LINEA);
+        doc.setLineWidth(0.3);
+        doc.rect(ML, y, CW, H);
+
+        // Fila de título (fondo azul muy claro)
+        doc.setFillColor(...GRIS_HEADER);
+        doc.rect(ML, y, CW, TH, 'F');
+        // Línea azul izquierda en título
+        doc.setFillColor(...AZUL);
+        doc.rect(ML, y, 3, TH, 'F');
+
+        doc.setTextColor(...AZUL);
+        doc.setFontSize(7.5); doc.setFont('helvetica', 'bold');
+        doc.text(titulo, ML + 6, y + 5.5);
+
+        // Filas de datos
+        filas.forEach(([lbl, val], i) => {
+          const ry = y + TH + i * RH;
+          // Fila alterna muy sutil
+          if (i % 2 === 1) {
+            doc.setFillColor(250, 252, 255);
+            doc.rect(ML, ry, CW, RH, 'F');
+          }
+          // Línea divisora
+          doc.setDrawColor(...LINEA);
+          doc.setLineWidth(0.2);
+          doc.line(ML, ry, ML + CW, ry);
+          // Separador vertical
+          doc.line(ML + 60, ry, ML + 60, ry + RH);
+
+          doc.setTextColor(...TEXTO2);
+          doc.setFontSize(8.5); doc.setFont('helvetica', 'normal');
+          doc.text(String(lbl), ML + 4, ry + 5);
+
+          doc.setTextColor(...TEXTO);
+          doc.setFont('helvetica', 'bold');
+          // Truncar valor si es muy largo
+          const maxW = CW - 64;
+          const valStr = String(val);
+          doc.text(valStr, ML + 64, ry + 5, { maxWidth: maxW });
+          doc.setFont('helvetica', 'normal');
+        });
+
+        y += H + 5;
+      };
+
+      // ── DATOS DEL CLIENTE ─────────────────────────
+      const filasCli = [['Nombre', this.nombre], ['Teléfono', this.telefono]];
+      if (this.correo)  filasCli.push(['Correo', this.correo]);
+      if (this.empresa) filasCli.push(['Empresa', this.empresa]);
+      seccion('DATOS DEL CLIENTE', filasCli);
+
+      // ── ESPECIFICACIONES ──────────────────────────
+      const filasEsp = [
+        ['Tipo de pieza', this.formaActual.nombre],
+        ['Material',      this.material],
+        ['Espesor',       this.espesor + '"'],
+        ['Cantidad',      this.cantidad + ' pza(s)'],
+        ...this.formaActual.campos.map(fc => [fc.label, (this.dims[fc.id]||'—') + '"']),
+      ];
+      if (this.observaciones) filasEsp.push(['Observaciones', this.observaciones]);
+      seccion('ESPECIFICACIONES DEL CORTE', filasEsp);
+
+      // ── PRECIOS ───────────────────────────────────
+      const filasPrecio = [
+        ['Precio unitario',   pv(c.precio_unitario)],
+        ['Cantidad',          '×' + this.cantidad],
+        ['Descuento scrap',   '-' + pv(c.descuento_scrap)],
+      ];
+
+      const RH = 7, TH = 8, TOTAL_H = 12;
+      const H  = TH + filasPrecio.length * RH + TOTAL_H;
+
+      doc.setDrawColor(...LINEA);
+      doc.setLineWidth(0.3);
+      doc.rect(ML, y, CW, H);
+
+      // Título sección precios
+      doc.setFillColor(...GRIS_HEADER);
+      doc.rect(ML, y, CW, TH, 'F');
+      doc.setFillColor(...AZUL);
+      doc.rect(ML, y, 3, TH, 'F');
+      doc.setTextColor(...AZUL);
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold');
+      doc.text('DESGLOSE DE PRECIO', ML + 6, y + 5.5);
+
+      // Filas de precios
+      filasPrecio.forEach(([lbl, val], i) => {
+        const ry = y + TH + i * RH;
+        if (i % 2 === 1) { doc.setFillColor(250, 252, 255); doc.rect(ML, ry, CW, RH, 'F'); }
+        doc.setDrawColor(...LINEA); doc.setLineWidth(0.2);
+        doc.line(ML, ry, ML + CW, ry);
+        doc.line(ML + 60, ry, ML + 60, ry + RH);
+        doc.setTextColor(...TEXTO2); doc.setFontSize(8.5); doc.setFont('helvetica', 'normal');
+        doc.text(lbl, ML + 4, ry + 5);
+        doc.setTextColor(...TEXTO); doc.setFont('helvetica', 'bold');
+        doc.text(val, ML + CW - 4, ry + 5, { align: 'right' });
+        doc.setFont('helvetica', 'normal');
+      });
+
+      // Fila TOTAL — fondo azul
+      const ty = y + TH + filasPrecio.length * RH;
+      doc.setFillColor(...AZUL);
+      doc.rect(ML, ty, CW, TOTAL_H, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+      doc.text('TOTAL', ML + 6, ty + 8);
+      doc.setFontSize(13);
+      doc.text(pv(c.precio_total), ML + CW - 4, ty + 8.5, { align: 'right' });
+
+      y += H + 8;
+
+      // ── Notas al pie ──────────────────────────────
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'normal');
+      doc.setTextColor(130, 130, 130);
+      doc.text('* Precio no incluye IVA. Vigencia de cotización: 5 días hábiles.', ML, y);
+      if (this.observaciones) {
+        y += 5;
+        doc.text('Obs: ' + this.observaciones, ML, y, { maxWidth: CW });
+      }
+
+      // ── Footer ────────────────────────────────────
+      doc.setFillColor(...AZUL);
+      doc.rect(0, 284, PW, 13, 'F');
+      // Línea roja encima del footer
+      doc.setFillColor(...ROJO);
+      doc.rect(0, 283, PW, 1.5, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold');
+      doc.text('DIMAPSA COMERCIALIZACIÓN', PW / 2, 290, { align: 'center' });
+      doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+      doc.setTextColor(180, 210, 255);
+      doc.text('Corte Laser a la Medida  ·  ' + (this.sucursalNombre || ''), PW / 2, 295, { align: 'center' });
+
+      doc.save(`cotizacion-${this.numeroPedido}.pdf`);
+    },
+
+    // ── Reiniciar ─────────────────────────────────────
+    reiniciar() {
+      Object.assign(this, {
+        screen:'form', loading:false, errorMsg:'',
+        nombre:'', telefono:'', correo:'', empresa:'',
+        forma:'rectangulo', material:'A36', espesor:'', cantidad:1,
+        dims:{}, observaciones:'', metodoPago:null, cotizacion:null, numeroPedido:'',
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+
+    formatPeso(n) {
+      return new Intl.NumberFormat('es-MX', { style:'currency', currency:'MXN' }).format(n || 0);
+    },
+  };
+}
+</script>
+</body>
+</html>
